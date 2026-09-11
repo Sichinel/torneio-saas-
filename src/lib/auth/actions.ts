@@ -2,47 +2,48 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { ok, fail, type ActionResult } from "@/lib/actions/result";
 
-export type AuthFormState = { error?: string; message?: string } | undefined;
-
-export async function login(_prevState: AuthFormState, formData: FormData): Promise<AuthFormState> {
+export async function login(_prevState: ActionResult | undefined, formData: FormData): Promise<ActionResult | undefined> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
-    return { error: "Preencha email e senha." };
+    return fail("Preencha email e senha.");
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: "Email ou senha inválidos." };
+    console.error("login: signInWithPassword failed", error);
+    return fail("Email ou senha inválidos.");
   }
 
   redirect("/dashboard");
 }
 
-export async function signup(_prevState: AuthFormState, formData: FormData): Promise<AuthFormState> {
+export async function signup(_prevState: ActionResult | undefined, formData: FormData): Promise<ActionResult | undefined> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
-    return { error: "Preencha email e senha." };
+    return fail("Preencha email e senha.");
   }
   if (password.length < 8) {
-    return { error: "A senha precisa ter pelo menos 8 caracteres." };
+    return fail("A senha precisa ter pelo menos 8 caracteres.");
   }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
-    return { error: error.message };
+    console.error("signup: signUp failed", error);
+    return fail(error.message);
   }
 
   if (!data.session) {
-    return { message: "Conta criada! Confira seu email para confirmar antes de entrar." };
+    return ok("Conta criada! Confira seu email para confirmar antes de entrar.");
   }
 
   redirect("/dashboard");
@@ -50,6 +51,7 @@ export async function signup(_prevState: AuthFormState, formData: FormData): Pro
 
 export async function logout() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) console.error("logout: signOut failed", error);
   redirect("/");
 }

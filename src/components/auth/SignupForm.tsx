@@ -2,9 +2,11 @@
 
 import { useActionState } from "react";
 import { signup } from "@/lib/auth/actions";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signup, undefined);
+  useActionFeedback(state);
 
   return (
     <form action={action}>
@@ -17,12 +19,12 @@ export function SignupForm() {
         <input id="password" name="password" type="password" required autoComplete="new-password" />
         <div className="hint">Pelo menos 8 caracteres.</div>
       </div>
-      {state?.error && (
+      {state && !state.ok && (
         <p style={{ color: "var(--danger)", fontSize: 13.5, marginTop: -8, marginBottom: 18 }}>
           {state.error}
         </p>
       )}
-      {state?.message && (
+      {state?.ok && state.message && (
         <p style={{ color: "var(--success)", fontSize: 13.5, marginTop: -8, marginBottom: 18 }}>
           {state.message}
         </p>

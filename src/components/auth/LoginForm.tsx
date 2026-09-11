@@ -2,9 +2,11 @@
 
 import { useActionState } from "react";
 import { login } from "@/lib/auth/actions";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(login, undefined);
+  useActionFeedback(state);
 
   return (
     <form action={action}>
@@ -16,7 +18,7 @@ export function LoginForm() {
         <label htmlFor="password">Senha</label>
         <input id="password" name="password" type="password" required autoComplete="current-password" />
       </div>
-      {state?.error && (
+      {state && !state.ok && (
         <p style={{ color: "var(--danger)", fontSize: 13.5, marginTop: -8, marginBottom: 18 }}>
           {state.error}
         </p>

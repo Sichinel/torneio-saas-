@@ -24,6 +24,9 @@ export default async function DashboardPage() {
           <div className="brand-name">Torneio</div>
         </div>
         <div className="topbar-actions">
+          <Link href="/dashboard/players" className="btn btn-ghost btn-sm">
+            Jogadores
+          </Link>
           <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{user?.email}</span>
           <form action={logout}>
             <button className="btn btn-ghost btn-sm" type="submit">

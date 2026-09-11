@@ -4,14 +4,15 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CategoryDraft, newCategoryDraft } from "@/lib/wizard/types";
 import { CategoryCard } from "./CategoryCard";
+import { useToast } from "@/components/toast/ToastProvider";
 
 export function NewTournamentWizard() {
   const router = useRouter();
+  const showToast = useToast();
   const [name, setName] = useState("");
   const [numCourts, setNumCourts] = useState(2);
   const [startTime, setStartTime] = useState("09:00");
   const [categories, setCategories] = useState<CategoryDraft[]>([newCategoryDraft(0)]);
-  const [notice, setNotice] = useState<string | null>(null);
 
   function updateCategory(key: string, patch: Partial<CategoryDraft>) {
     setCategories((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
@@ -25,7 +26,7 @@ export function NewTournamentWizard() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setNotice("Sorteio e salvamento chegam no próximo passo — por enquanto isso só valida o formulário.");
+    showToast("Sorteio e salvamento chegam no próximo passo — por enquanto isso só valida o formulário.", "success");
   }
 
   return (
@@ -76,12 +77,6 @@ export function NewTournamentWizard() {
           onRemove={() => removeCategory(draft.key)}
         />
       ))}
-
-      {notice && (
-        <div className="panel glass" style={{ color: "var(--accent-deep)" }}>
-          {notice}
-        </div>
-      )}
 
       <div className="actions-row">
         <button className="btn btn-ghost" type="button" onClick={() => router.push("/dashboard")}>
