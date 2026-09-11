@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 
@@ -9,6 +10,12 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const { data: tournaments } = await supabase
+    .from("tournaments")
+    .select("id, name, public_code, created_at, categories(format)")
+    .eq("organizer_id", user!.id)
+    .order("created_at", { ascending: false });
+
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "22px 20px 100px" }}>
       <div className="topbar">
@@ -16,21 +23,51 @@ export default async function DashboardPage() {
           <div className="brand-mark">●</div>
           <div className="brand-name">Torneio</div>
         </div>
+        <div className="topbar-actions">
+          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{user?.email}</span>
+          <form action={logout}>
+            <button className="btn btn-ghost btn-sm" type="submit">
+              Sair
+            </button>
+          </form>
+        </div>
       </div>
-      <div className="panel glass">
-        <p style={{ marginBottom: 16 }}>
-          Logado como <strong>{user?.email}</strong>.
-        </p>
-        <p className="hint" style={{ marginBottom: 16 }}>
-          Este é um placeholder do painel — a listagem real de &quot;Meus torneios&quot; entra no
-          próximo passo.
-        </p>
-        <form action={logout}>
-          <button className="btn btn-ghost btn-sm" type="submit">
-            Sair
-          </button>
-        </form>
+
+      <div className="section-title">
+        <h2>Meus torneios</h2>
+        <Link href="/dashboard/new" className="btn btn-primary">
+          + Novo torneio
+        </Link>
       </div>
+
+      {tournaments && tournaments.length > 0 ? (
+        <div className="t-grid">
+          {tournaments.map((t) => (
+            <div className="t-card glass" key={t.id}>
+              <div className="t-card-name">{t.name}</div>
+              <div className="t-card-meta">
+                {t.categories?.length ?? 0} categoria(s) · código{" "}
+                <code
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    background: "rgba(79,168,255,.12)",
+                    padding: "2px 7px",
+                    borderRadius: 6,
+                  }}
+                >
+                  {t.public_code}
+                </code>
+              </div>
+              <span className="status-pill pendente">
+                <span className="status-dot" />
+                Sorteio pendente
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="empty glass">Nenhum torneio criado ainda. Comece um agora.</div>
+      )}
     </div>
   );
 }
