@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolvePlayersFromLines, type PlayerRow } from "./resolve-entries";
+import { resolvePlayersFromLines, type PlayerBank, type PlayerRow } from "./resolve-entries";
 import { pairBalancedSides } from "@/lib/tournament-logic/pairing";
 import { effectiveTeamType, type CategoryDraft } from "@/lib/wizard/types";
 import type { EntryDraft } from "@/lib/tournament-logic/types";
@@ -13,7 +13,7 @@ export async function buildEntriesForCategory(
   supabase: SupabaseClient,
   ownerId: string,
   draft: CategoryDraft,
-  existingPlayers: PlayerRow[],
+  playerBank: PlayerBank,
 ): Promise<EntryDraft[]> {
   const lines = draft.participantsRaw
     .split("\n")
@@ -41,7 +41,7 @@ export async function buildEntriesForCategory(
           `Não consegui interpretar: ${invalidLines.map((l) => `"${l}"`).join(", ")}.`,
       );
     }
-    const resolved = await resolvePlayersFromLines(supabase, ownerId, names, existingPlayers);
+    const resolved = await resolvePlayersFromLines(supabase, ownerId, names, playerBank);
     return pairsRaw
       .map(([a, b]) => {
         const pa = resolved.get(a);
@@ -53,7 +53,7 @@ export async function buildEntriesForCategory(
   }
 
   // individual
-  const resolved = await resolvePlayersFromLines(supabase, ownerId, lines, existingPlayers);
+  const resolved = await resolvePlayersFromLines(supabase, ownerId, lines, playerBank);
   // linhas diferentes podem resolver pro mesmo jogador ("ana d" e "Ana - direita")
   const players = [...new Map(lines.map((l) => resolved.get(l)).filter((p): p is PlayerRow => !!p).map((p) => [p.id, p])).values()];
 

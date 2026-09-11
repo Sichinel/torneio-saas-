@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { buildEntriesForCategory } from "./build-entries";
+import { toPlayerBank } from "./resolve-entries";
 import { buildCategory } from "@/lib/tournament-logic/build-category";
 import { scheduleAcrossCategories, type CategoryTiers } from "@/lib/tournament-logic/schedule";
 import { effectiveTeamType, type CategoryDraft } from "@/lib/wizard/types";
@@ -54,6 +55,8 @@ export async function createTournament(input: CreateTournamentInput): Promise<Cr
     console.error("createTournament: failed to load player bank", playersError);
     return fail(`Não foi possível ler seu banco de jogadores: ${playersError.message}`);
   }
+  // compartilhado entre as categorias: quem uma categoria cria, a próxima já enxerga
+  const playerBank = toPlayerBank(existingPlayers ?? []);
 
   const courts = Array.from({ length: input.numCourts }, (_, i) => `Quadra ${i + 1}`);
   const publicCode = genPublicCode();
@@ -96,7 +99,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<Cr
         throw new Error(categoryError?.message ?? "Falha ao criar categoria.");
       }
 
-      const entries = await buildEntriesForCategory(supabase, user.id, cat, existingPlayers ?? []);
+      const entries = await buildEntriesForCategory(supabase, user.id, cat, playerBank);
       if (entries.length < 2) {
         throw new Error(
           `A categoria "${cat.name}" ficou com menos de 2 participantes depois de resolver os jogadores. Confira se os nomes colados batem com o formato esperado.`,
