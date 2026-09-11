@@ -42,6 +42,12 @@ export async function signup(_prevState: ActionResult | undefined, formData: For
     return fail(error.message);
   }
 
+  // Com confirmação de email ligada, o Supabase não retorna erro pra email
+  // já cadastrado (anti-enumeração): devolve um usuário sem identities.
+  if (data.user?.identities?.length === 0) {
+    return fail("Este email já está cadastrado. Use o link Entrar abaixo.");
+  }
+
   if (!data.session) {
     return ok("Conta criada! Confira seu email para confirmar antes de entrar.");
   }
