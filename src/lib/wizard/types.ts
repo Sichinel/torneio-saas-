@@ -50,3 +50,10 @@ export function participantsPlaceholder(draft: CategoryDraft): string {
   if (effectiveTeamType(draft) === "individual") return "João\nPedro\nAna\nBia\nLucas\nRafael";
   return "João / Pedro\nAna / Bia\nLucas / Rafael\nCarla / Marina";
 }
+
+export function participantsHint(draft: CategoryDraft): string {
+  if (effectiveTeamType(draft) === "individual") {
+    return "Um jogador por linha. Pode colar do banco de jogadores.";
+  }
+  return 'Uma dupla por linha, separando os dois nomes com "/" — ex: "João / Pedro". Não use hífen (-) nem vírgula.';
+}

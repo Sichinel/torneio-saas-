@@ -289,10 +289,13 @@ textarea {
     }
   }
   .t-card {
+    display: block;
     grid-column: span 1;
     border-radius: 20px;
     padding: 20px;
     cursor: pointer;
+    text-decoration: none;
+    color: inherit;
     transition:
       transform 0.15s ease,
       box-shadow 0.15s ease;

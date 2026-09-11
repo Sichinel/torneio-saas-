@@ -14,7 +14,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback<ShowToast>((message, variant = "success") => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     setToast({ message, variant });
-    hideTimer.current = setTimeout(() => setToast(null), 2600);
+    // Erros ficam mais tempo na tela — costumam ser mais longos (ex:
+    // listando quais linhas não foram entendidas) e o usuário precisa de
+    // tempo pra ler com calma, não só perceber que algo deu errado.
+    hideTimer.current = setTimeout(() => setToast(null), variant === "error" ? 7000 : 2600);
   }, []);
 
   return (

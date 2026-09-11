@@ -2,6 +2,7 @@
 
 import {
   CategoryDraft,
+  participantsHint,
   participantsLabel,
   participantsPlaceholder,
   showTeamTypeChoice,
@@ -158,9 +159,10 @@ export function CategoryCard({
           onChange={(e) => onChange({ participantsRaw: e.target.value })}
           placeholder={participantsPlaceholder(draft)}
         />
-        <div className="hint">
-          Cole a lista direto — uma entrada por linha. Dá pra editar/sortear de novo depois.
+        <div className="hint" style={{ fontWeight: 600 }}>
+          {participantsHint(draft)}
         </div>
+        <div className="hint">Dá pra editar/sortear de novo depois.</div>
       </div>
 
       {draft.format === "grupos" && (
