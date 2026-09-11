@@ -1,28 +1,48 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { matchPastedNames, type PlayerLite } from "@/lib/players/match";
-import { createPlayersBulk } from "@/lib/players/actions";
+import { matchPastedNames, normalizeName, type PasteMatch, type PlayerLite } from "@/lib/players/match";
+import { savePastedPlayers } from "@/lib/players/actions";
 import { useToast } from "@/components/toast/ToastProvider";
+
+/**
+ * O que salvar a partir da análise: jogadores novos (deduplicados —
+ * "augusto E" e "Augusto - esquerda" na mesma lista viram um só) e
+ * lados colados que diferem do lado salvo no banco. Em repetição,
+ * vale a primeira linha.
+ */
+function pendingSaves(results: PasteMatch[]) {
+  const newPlayers = new Map<string, { name: string; side: string | null }>();
+  const sideChanges = new Map<string, { id: string; side: string }>();
+  results.forEach((r) => {
+    if (!r.matchedPlayerId) {
+      const key = normalizeName(r.name);
+      if (!newPlayers.has(key)) newPlayers.set(key, { name: r.name, side: r.side });
+    } else if (r.side && r.side !== r.matchedSide && !sideChanges.has(r.matchedPlayerId)) {
+      sideChanges.set(r.matchedPlayerId, { id: r.matchedPlayerId, side: r.side });
+    }
+  });
+  return { newPlayers: [...newPlayers.values()], sideChanges: [...sideChanges.values()] };
+}
 
 export function PasteRecognize({ players }: { players: PlayerLite[] }) {
   const [raw, setRaw] = useState("");
-  const [results, setResults] = useState<ReturnType<typeof matchPastedNames> | null>(null);
+  const [results, setResults] = useState<PasteMatch[] | null>(null);
   const [isPending, startTransition] = useTransition();
   const showToast = useToast();
+
+  const pending = results ? pendingSaves(results) : null;
 
   function analyze() {
     setResults(matchPastedNames(raw, players));
   }
 
-  function addAllNew() {
-    if (!results) return;
-    const newNames = results.filter((r) => !r.matchedPlayerId).map((r) => r.raw);
-    if (newNames.length === 0) return;
+  function save() {
+    if (!pending) return;
     startTransition(async () => {
-      const result = await createPlayersBulk(newNames);
+      const result = await savePastedPlayers(pending.newPlayers, pending.sideChanges);
       if (result.ok) {
-        showToast(result.message ?? "Jogadores adicionados.", "success");
+        showToast(result.message ?? "Jogadores salvos.", "success");
         setResults(null);
         setRaw("");
       } else {
@@ -43,7 +63,7 @@ export function PasteRecognize({ players }: { players: PlayerLite[] }) {
         </button>
       </div>
 
-      {results && (
+      {results && pending && (
         <div style={{ marginTop: 16 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
             {results.map((r, i) => (
@@ -52,13 +72,17 @@ export function PasteRecognize({ players }: { players: PlayerLite[] }) {
                 className="badge"
                 style={r.matchedPlayerId ? { background: "var(--success-soft)", color: "var(--success)" } : undefined}
               >
-                {r.raw} · {r.matchedPlayerId ? `já cadastrado (${r.matchedSide ?? "sem lado"})` : "novo"}
+                {!r.matchedPlayerId
+                  ? `${r.name} · novo (${r.side ?? "sem lado"})`
+                  : r.side && r.side !== r.matchedSide
+                    ? `${r.matchedName} · já cadastrado (${r.matchedSide ?? "sem lado"} → ${r.side})`
+                    : `${r.matchedName} · já cadastrado (${r.matchedSide ?? "sem lado"})`}
               </span>
             ))}
           </div>
-          {results.some((r) => !r.matchedPlayerId) && (
-            <button className="btn btn-primary btn-sm" type="button" onClick={addAllNew} disabled={isPending}>
-              {isPending ? "Adicionando…" : "Adicionar novos ao banco"}
+          {(pending.newPlayers.length > 0 || pending.sideChanges.length > 0) && (
+            <button className="btn btn-primary btn-sm" type="button" onClick={save} disabled={isPending}>
+              {isPending ? "Salvando…" : "Salvar no banco"}
             </button>
           )}
         </div>
