@@ -383,6 +383,8 @@ textarea {
   .field input[type="text"],
   .field input[type="number"],
   .field input[type="time"],
+  .field input[type="email"],
+  .field input[type="password"],
   .field select,
   .field textarea {
     width: 100%;
