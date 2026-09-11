@@ -10,17 +10,28 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
+function playersOf(match: MatchDraft): string[] {
+  return [...(match.teamA?.playerIds ?? []), ...(match.teamB?.playerIds ?? [])];
+}
+
 /**
  * Agenda partidas de TODAS as categorias do torneio nas mesmas quadras,
  * "camada" por "camada" (grupos/mata-mata/americano-fixas têm 1 única
  * camada; americano rotativo e Super 8 têm 1 camada por rodada). Dentro
- * de cada camada, intercala as categorias e distribui pra quadra mais
- * livre — é isso que garante que categorias em paralelo dividam as
- * quadras de forma razoável em vez de uma esgotar o dia da outra.
+ * de cada camada, intercala as categorias (ordem de prioridade) — é isso
+ * que garante que categorias em paralelo dividam as quadras de forma
+ * razoável em vez de uma esgotar o dia da outra.
+ *
+ * Cada vez que uma quadra libera, ela recebe a primeira partida da fila
+ * cujos jogadores estão todos livres naquele horário; se nenhuma estiver,
+ * a quadra espera até o próximo jogador ficar livre. Assim ninguém é
+ * escalado em duas quadras ao mesmo tempo (nem entre camadas).
  */
 export function scheduleAcrossCategories(categories: CategoryTiers[], courts: string[], startTime: string) {
   const courtFreeMinutes: Record<string, number> = {};
   courts.forEach((c) => (courtFreeMinutes[c] = 0));
+  const playerFreeMinutes = new Map<string, number>();
+  const freeAt = (match: MatchDraft) => Math.max(0, ...playersOf(match).map((p) => playerFreeMinutes.get(p) ?? 0));
   const maxTiers = categories.reduce((max, c) => Math.max(max, c.tiers.length), 0);
 
   for (let tier = 0; tier < maxTiers; tier++) {
@@ -38,14 +49,23 @@ export function scheduleAcrossCategories(categories: CategoryTiers[], courts: st
       }
     }
 
-    tierMatches.forEach((match) => {
+    while (tierMatches.length > 0) {
       let bestCourt = courts[0];
       courts.forEach((c) => {
         if (courtFreeMinutes[c] < courtFreeMinutes[bestCourt]) bestCourt = c;
       });
+      const now = courtFreeMinutes[bestCourt];
+      const idx = tierMatches.findIndex((m) => freeAt(m) <= now);
+      if (idx === -1) {
+        // ninguém da fila pode jogar agora: a quadra fica parada até o próximo jogador liberar
+        courtFreeMinutes[bestCourt] = Math.min(...tierMatches.map(freeAt));
+        continue;
+      }
+      const [match] = tierMatches.splice(idx, 1);
       match.court = bestCourt;
-      match.scheduledTime = addMinutes(startTime, courtFreeMinutes[bestCourt]);
-      courtFreeMinutes[bestCourt] += match.durationMinutes;
-    });
+      match.scheduledTime = addMinutes(startTime, now);
+      courtFreeMinutes[bestCourt] = now + match.durationMinutes;
+      playersOf(match).forEach((p) => playerFreeMinutes.set(p, now + match.durationMinutes));
+    }
   }
 }
