@@ -91,7 +91,7 @@ export async function createTournament(input: CreateTournamentInput): Promise<Cr
           americano_type: cat.format === "americano" ? cat.americanoType : null,
           sets_to_win: cat.setsToWin,
           max_sets: cat.setsToWin === 1 ? 1 : 3,
-          config: { numGroups: cat.numGroups, rounds: cat.rounds },
+          config: { numGroups: cat.numGroups, rounds: cat.rounds, durationMinutes: cat.durationMinutes },
         })
         .select("id")
         .single();

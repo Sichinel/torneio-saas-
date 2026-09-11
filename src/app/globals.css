@@ -788,6 +788,44 @@ textarea {
     font-weight: 600;
   }
 
+  /* Edição de placar pelo celular (organizador) e placar na lista de jogos */
+  .match-score {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  .match-teams .team-name:last-child {
+    text-align: right;
+  }
+  .score-grid {
+    display: grid;
+    gap: 8px;
+    align-items: center;
+    margin-top: 14px;
+  }
+  .score-grid-head {
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+  .score-grid-team {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .score-input.lg {
+    width: 52px;
+    height: 48px;
+    font-size: 18px;
+  }
+  .edit-row select,
+  .edit-row input[type="time"] {
+    min-height: 40px;
+  }
+
   #tourSpotlight {
     position: fixed;
     border-radius: 14px;
