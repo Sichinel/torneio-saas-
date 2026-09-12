@@ -6,6 +6,8 @@ import type { SetScore } from "@/lib/tournament-logic/results";
 import { computeGroupStandings } from "@/lib/tournament-logic/standings";
 import { QUALIFIERS_PER_GROUP, isGroupStageComplete, knockoutRoundLabel } from "@/lib/tournament-logic/knockout";
 import { hasAnyScore } from "@/lib/tournament-logic/results";
+import { inferDurationMinutes } from "@/lib/tournament-logic/schedule";
+import { findScheduleConflicts, scheduledMatchesFromRows } from "@/lib/tournament-logic/conflicts";
 import { DeleteTournamentButton } from "@/components/tournaments/DeleteTournamentButton";
 import { MatchEditor } from "@/components/tournaments/MatchEditor";
 import { KnockoutControls } from "@/components/tournaments/KnockoutControls";
@@ -56,7 +58,7 @@ export default async function TournamentDetailPage({ params }: { params: Promise
 
   const { data: categories } = await supabase
     .from("categories")
-    .select("id, name, format, max_sets")
+    .select("id, name, format, max_sets, config")
     .eq("tournament_id", tournament.id)
     .order("created_at");
 
@@ -74,6 +76,13 @@ export default async function TournamentDetailPage({ params }: { params: Promise
   ]);
   const matches = (matchData ?? []) as MatchRow[];
   const courts: string[] = tournament.courts ?? [];
+  const durationByCat = new Map(
+    (categories ?? []).map((c) => [
+      c.id,
+      inferDurationMinutes(c.config, matches.filter((m) => m.category_id === c.id), tournament.start_time),
+    ]),
+  );
+  const conflicts = findScheduleConflicts(scheduledMatchesFromRows(matches, (id) => durationByCat.get(id) ?? 40));
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "22px 16px 100px" }}>
@@ -105,6 +114,13 @@ export default async function TournamentDetailPage({ params }: { params: Promise
         </span>
       </div>
 
+      {conflicts.size > 0 && (
+        <div className="conflict-banner" role="status">
+          ⚠ {conflicts.size} jogo(s) com conflito de horário — marcados em vermelho abaixo. Ajuste a quadra ou o horário de
+          um deles para resolver.
+        </div>
+      )}
+
       {(categories ?? []).length === 0 && <div className="empty glass">Esse torneio não tem categorias.</div>}
 
       {(categories ?? []).map((cat) => {
@@ -119,7 +135,14 @@ export default async function TournamentDetailPage({ params }: { params: Promise
           .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
         const totalRounds = bracket.length ? Math.max(...bracket.map((m) => m.round ?? 0)) + 1 : 0;
         const editor = (m: MatchRow, label?: string) => (
-          <MatchEditor key={m.id} match={m} courts={courts} maxSets={cat.max_sets} label={label} />
+          <MatchEditor
+            key={m.id}
+            match={m}
+            courts={courts}
+            maxSets={cat.max_sets}
+            label={label}
+            conflicts={conflicts.get(m.id)}
+          />
         );
 
         return (

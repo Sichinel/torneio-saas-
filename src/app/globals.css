@@ -96,7 +96,28 @@ textarea {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px 14px;
+    /* No celular as ações caem pra segunda linha em vez de atropelar a
+       marca e empurrar o "Sair" pra fora da tela. */
+    flex-wrap: wrap;
     padding: 4px 0 24px;
+  }
+  .topbar .brand {
+    flex: none;
+  }
+  /* O email ocupa meia tela no celular e não ajuda a operar o torneio. */
+  .topbar-email {
+    font-size: 13px;
+    color: var(--ink-soft);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  @media (max-width: 560px) {
+    .topbar-email {
+      display: none;
+    }
   }
   .brand {
     display: flex;
@@ -125,6 +146,8 @@ textarea {
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
   }
   .help-btn {
     width: 34px;
@@ -825,6 +848,35 @@ textarea {
   .edit-row input[type="time"] {
     min-height: 40px;
   }
+  /* Conflito de agenda (mesma quadra ou mesma dupla em horários sobrepostos) */
+  .match.has-conflict {
+    border: 1.5px solid var(--danger);
+    background: color-mix(in srgb, var(--danger) 6%, rgba(255, 255, 255, 0.55));
+  }
+  .badge.conflict {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .conflict-list {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+    color: var(--danger);
+    list-style: disc;
+  }
+  .conflict-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 14px;
+    padding: 12px 16px;
+    font-size: 13.5px;
+    margin-bottom: 18px;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  }
 
   #tourSpotlight {
     position: fixed;
@@ -1187,5 +1239,165 @@ textarea {
       transform: none !important;
       stroke-dashoffset: 0 !important;
     }
+  }
+}
+
+/* =====================================================================
+   PÁGINA PÚBLICA /t/[code]
+   Escrita pra celular primeiro: é onde ela vive, na beira da quadra,
+   no sol, com a pessoa segurando o telefone com uma mão só. Alvos de
+   toque grandes, números grandes, zero zoom necessário.
+===================================================================== */
+@layer components {
+  .pub {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 14px 14px 64px;
+  }
+  .pub-head h1 {
+    font-size: 22px;
+    line-height: 1.22;
+    margin: 0;
+  }
+  .pub-head .meta {
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    margin-top: 5px;
+  }
+
+  /* Grudadas no topo: a lista de jogos é longa e a pessoa precisa
+     trocar de quadra sem rolar tudo de volta. */
+  .pub-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+    margin: 14px 0 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .pub-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .pub-tab {
+    flex: 1 0 auto;
+    min-height: 44px; /* alvo de toque confortável */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    border-radius: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
+  }
+  .pub-tab[aria-selected="true"] {
+    background: var(--accent-deep);
+    color: #fff;
+  }
+
+  .pub-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--success);
+  }
+  .pub-live.off {
+    color: var(--ink-soft);
+  }
+  .pub-live .status-dot {
+    background: currentColor;
+  }
+
+  .pub-match-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+  .pub-time {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Uma linha por dupla, placar à direita em colunas alinhadas — lê-se
+     como súmula de papel, que é o que a galera espera ver. */
+  .pub-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 5px 0;
+  }
+  .pub-team {
+    flex: 1;
+    min-width: 0;
+    font-size: 16px;
+    line-height: 1.3;
+  }
+  .pub-team.win {
+    font-weight: 700;
+  }
+  .pub-team.bye {
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+  .pub-sets {
+    display: flex;
+    gap: 8px;
+    flex: none;
+  }
+  .pub-set {
+    width: 22px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  .pub-set.win {
+    color: var(--ink);
+  }
+  .pub-vs {
+    font-size: 13px;
+    color: var(--ink-soft);
+    flex: none;
+  }
+
+  .pub-group {
+    font-family: var(--font-display), "Space Grotesk", sans-serif;
+    font-size: 17px;
+    margin: 22px 0 10px;
+  }
+  .pub .standings {
+    font-size: 15px;
+  }
+  .pub .standings th {
+    font-size: 12px;
+  }
+
+  .pub-foot {
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    text-align: center;
+    margin-top: 28px;
+    line-height: 1.5;
   }
 }

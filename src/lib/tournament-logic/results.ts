@@ -6,7 +6,8 @@ export type ResultCheck =
   | { ok: true; sets: SetScore[]; winnerSide: "A" | "B" | null; completed: boolean }
   | { ok: false; error: string };
 
-const MAX_GAMES = 99;
+/** Games por set: 0 a 7 (7 cobre o 7-5 e o 7-6 do tie-break). */
+export const MAX_GAMES_PER_SET = 7;
 
 /**
  * Valida o placar digitado pelo organizador e decide o vencedor.
@@ -34,8 +35,8 @@ export function checkResult(raw: SetScore[], setsToWin: number, maxSets: number)
       continue;
     }
     if (a === null || b === null) return { ok: false, error: `Preencha os dois lados do ${n}º set.` };
-    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a > MAX_GAMES || b > MAX_GAMES) {
-      return { ok: false, error: `O ${n}º set tem um número inválido.` };
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a > MAX_GAMES_PER_SET || b > MAX_GAMES_PER_SET) {
+      return { ok: false, error: `O ${n}º set tem um placar inválido: cada set vai de 0 a ${MAX_GAMES_PER_SET} games.` };
     }
     if (i >= maxSets) return { ok: false, error: "Essa categoria é decidida em 1 set só." };
     if (sawEmpty) return { ok: false, error: `Lance o ${n - 1}º set antes do ${n}º.` };

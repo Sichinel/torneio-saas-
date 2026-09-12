@@ -19,6 +19,32 @@ export function minutesSinceStart(startTime: string, time: string): number {
   return toMin(time) - toMin(startTime);
 }
 
+const DEFAULT_DURATION_MINUTES = 40;
+
+/**
+ * Duração dos jogos de uma categoria: a gravada no config (torneios
+ * novos); em torneios antigos, deduzida do menor intervalo entre jogos
+ * seguidos na mesma quadra; senão, 40 minutos.
+ */
+export function inferDurationMinutes(
+  config: Record<string, unknown> | null | undefined,
+  matches: { court: string | null; scheduled_time: string | null }[],
+  startTime: string,
+): number {
+  const stored = Number(config?.durationMinutes);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  const byCourt = new Map<string, number[]>();
+  matches.forEach((m) => {
+    if (m.court && m.scheduled_time) byCourt.set(m.court, [...(byCourt.get(m.court) ?? []), minutesSinceStart(startTime, m.scheduled_time)]);
+  });
+  let gap = Infinity;
+  byCourt.forEach((times) => {
+    times.sort((a, b) => a - b);
+    for (let i = 1; i < times.length; i++) if (times[i] > times[i - 1]) gap = Math.min(gap, times[i] - times[i - 1]);
+  });
+  return Number.isFinite(gap) ? gap : DEFAULT_DURATION_MINUTES;
+}
+
 /**
  * Agenda um mata-mata recém-gerado. A 1ª rodada começa a partir de
  * `notBefore` (fim da fase de grupos); cada partida das rodadas seguintes

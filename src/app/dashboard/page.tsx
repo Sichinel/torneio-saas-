@@ -34,7 +34,7 @@ export default async function DashboardPage() {
           <Link href="/dashboard/players" className="btn btn-ghost btn-sm">
             Jogadores
           </Link>
-          <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{user?.email}</span>
+          <span className="topbar-email">{user?.email}</span>
           <form action={logout}>
             <button className="btn btn-ghost btn-sm" type="submit">
               Sair

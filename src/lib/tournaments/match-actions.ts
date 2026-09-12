@@ -1,9 +1,14 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import {
+  MATCH_COLUMNS,
+  loadCategoryContext as loadContext,
+  revalidateTournament,
+  type MatchRow,
+  type TournamentContext as Context,
+} from "./context";
 import { checkResult, hasAnyScore, type SetScore } from "@/lib/tournament-logic/results";
 import {
   QUALIFIERS_PER_GROUP,
@@ -12,67 +17,11 @@ import {
   isGroupStageComplete,
   planBracketAdvance,
 } from "@/lib/tournament-logic/knockout";
-import { minutesSinceStart, scheduleKnockout } from "@/lib/tournament-logic/schedule";
+import { inferDurationMinutes, minutesSinceStart, scheduleKnockout } from "@/lib/tournament-logic/schedule";
+import { findScheduleConflicts, scheduledMatchesFromRows } from "@/lib/tournament-logic/conflicts";
 import type { MatchTeam } from "@/lib/tournament-logic/types";
 
-const MATCH_COLUMNS =
-  "id, category_id, group_id, stage, round, bracket_slot, court, scheduled_time, team_a, team_b, sets, completed, winner_side";
-
-type MatchRow = {
-  id: string;
-  category_id: string;
-  group_id: string | null;
-  stage: string;
-  round: number | null;
-  bracket_slot: number | null;
-  court: string | null;
-  scheduled_time: string | null;
-  team_a: MatchTeam;
-  team_b: MatchTeam;
-  sets: SetScore[];
-  completed: boolean;
-  winner_side: "A" | "B" | null;
-};
-
-type Context = {
-  supabase: SupabaseClient;
-  category: { id: string; format: string; sets_to_win: number; max_sets: number; config: Record<string, unknown> | null };
-  tournament: { id: string; public_code: string; courts: string[]; start_time: string };
-};
-
-const DEFAULT_DURATION = 40;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/** Usuário logado + categoria + torneio, garantindo que o usuário é o organizador. */
-async function loadContext(categoryId: string): Promise<{ ok: true; ctx: Context } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Sessão expirada. Atualize a página e faça login de novo." };
-
-  const { data: category } = await supabase
-    .from("categories")
-    .select("id, format, sets_to_win, max_sets, config, tournament_id")
-    .eq("id", categoryId)
-    .maybeSingle();
-  const { data: tournament } = category
-    ? await supabase
-        .from("tournaments")
-        .select("id, organizer_id, public_code, courts, start_time")
-        .eq("id", category.tournament_id)
-        .maybeSingle()
-    : { data: null };
-  if (!category || !tournament || tournament.organizer_id !== user.id) {
-    return { ok: false, error: "Partida não encontrada (ou você não é o organizador deste torneio)." };
-  }
-  return { ok: true, ctx: { supabase, category, tournament } };
-}
-
-function revalidateTournament(t: Context["tournament"]) {
-  revalidatePath(`/dashboard/${t.id}`);
-  revalidatePath(`/t/${t.public_code}`);
-}
 
 const toBracket = (m: MatchRow) => ({
   id: m.id,
@@ -170,7 +119,8 @@ export async function saveMatchResult(matchId: string, rawSets: unknown): Promis
 
   revalidateTournament(ctx.tournament);
   if (result.completed) return ok("Placar salvo — jogo finalizado.");
-  return ok(hasAnyScore(result.sets) ? "Placar parcial salvo." : "Placar apagado.");
+  if (hasAnyScore(result.sets)) return ok("Placar parcial salvo.");
+  return ok(hasAnyScore(match.sets) ? "Placar apagado." : "O jogo continua sem placar.");
 }
 
 /** Muda quadra e/ou horário de uma partida. Avisa (sem bloquear) se a quadra já tem jogo no mesmo horário. */
@@ -192,37 +142,30 @@ export async function saveMatchSchedule(matchId: string, court: string | null, t
     .select("id");
   if (error || !updated?.length) return fail(`Não foi possível salvar o horário${error ? `: ${error.message}` : "."}`);
 
-  let warning = "";
-  if (newCourt && newTime) {
-    const { data: cats } = await supabase.from("categories").select("id").eq("tournament_id", tournament.id);
-    const { count } = await supabase
-      .from("matches")
-      .select("id", { count: "exact", head: true })
-      .in("category_id", (cats ?? []).map((c) => c.id))
-      .eq("court", newCourt)
-      .eq("scheduled_time", newTime)
-      .neq("id", match.id);
-    if (count) warning = ` Atenção: a ${newCourt} já tem outro jogo às ${newTime}.`;
-  }
+  // não bloqueia: salva e só avisa; a lista marca os jogos em conflito em vermelho
+  const { data: cats } = await supabase.from("categories").select("id, config").eq("tournament_id", tournament.id);
+  const { data: allRows } = await supabase
+    .from("matches")
+    .select(MATCH_COLUMNS)
+    .in("category_id", (cats ?? []).map((c) => c.id));
+  const all = (allRows ?? []) as MatchRow[];
+  const durationByCat = new Map(
+    (cats ?? []).map((c) => [c.id, inferDurationMinutes(c.config, all.filter((m) => m.category_id === c.id), tournament.start_time)]),
+  );
+  const conflicts =
+    findScheduleConflicts(scheduledMatchesFromRows(all, (id) => durationByCat.get(id) ?? 40)).get(match.id) ?? [];
+  const warning = conflicts.length
+    ? ` ⚠ Conflito de horário — ${conflicts[0]}${conflicts.length > 1 ? ` (e mais ${conflicts.length - 1})` : ""}. Os jogos ficaram marcados em vermelho.`
+    : "";
+
+  const oldTime = match.scheduled_time ? match.scheduled_time.slice(0, 5) : null;
+  const changes: string[] = [];
+  if (newCourt !== match.court) changes.push(newCourt ? `quadra alterada para ${newCourt}` : "quadra removida");
+  if (newTime !== oldTime) changes.push(newTime ? `horário alterado para ${newTime}` : "horário removido");
+  const summary = changes.length ? changes.join(" e ") : "quadra e horário sem mudança";
 
   revalidateTournament(tournament);
-  return ok(`Horário salvo.${warning}`);
-}
-
-/** Duração dos jogos da categoria: gravada no config; em torneios antigos, deduzida da agenda. */
-function categoryDuration(config: Record<string, unknown> | null, matches: MatchRow[], startTime: string): number {
-  const stored = Number(config?.durationMinutes);
-  if (Number.isFinite(stored) && stored > 0) return stored;
-  const byCourt = new Map<string, number[]>();
-  matches.forEach((m) => {
-    if (m.court && m.scheduled_time) byCourt.set(m.court, [...(byCourt.get(m.court) ?? []), minutesSinceStart(startTime, m.scheduled_time)]);
-  });
-  let gap = Infinity;
-  byCourt.forEach((times) => {
-    times.sort((a, b) => a - b);
-    for (let i = 1; i < times.length; i++) if (times[i] > times[i - 1]) gap = Math.min(gap, times[i] - times[i - 1]);
-  });
-  return Number.isFinite(gap) ? gap : DEFAULT_DURATION;
+  return ok(`${summary.charAt(0).toUpperCase()}${summary.slice(1)}.${warning}`);
 }
 
 /**
@@ -254,7 +197,7 @@ export async function generateKnockout(categoryId: string): Promise<ActionResult
   if (!cross.ok) return fail(cross.error);
 
   const start = tournament.start_time;
-  const duration = categoryDuration(category.config, groupMatches, start);
+  const duration = inferDurationMinutes(category.config, groupMatches, start);
   const knockout = buildKnockoutMatches(cross.pairs, duration);
 
   // quando cada quadra fica livre, considerando todas as categorias do torneio
@@ -262,7 +205,7 @@ export async function generateKnockout(categoryId: string): Promise<ActionResult
   const { data: allMatches } = await supabase.from("matches").select(MATCH_COLUMNS).in("category_id", catIds);
   const all = (allMatches ?? []) as MatchRow[];
   const durationByCat = new Map(
-    (cats ?? []).map((c) => [c.id, categoryDuration(c.config, all.filter((m) => m.category_id === c.id), start)]),
+    (cats ?? []).map((c) => [c.id, inferDurationMinutes(c.config, all.filter((m) => m.category_id === c.id), start)]),
   );
   const endOf = (m: MatchRow) => minutesSinceStart(start, m.scheduled_time!) + (durationByCat.get(m.category_id) ?? duration);
   const courtFreeFrom: Record<string, number> = {};
