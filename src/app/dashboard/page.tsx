@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
-import { formatarData } from "@/components/tournaments/TournamentDateEditor";
+import { formatarData } from "@/lib/tournament-logic/display";
 
 export const metadata = { title: "Meus torneios — Torneio" };
 

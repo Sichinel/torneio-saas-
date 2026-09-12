@@ -3,17 +3,7 @@
 import { useActionState, useState } from "react";
 import { updateTournamentDate } from "@/lib/tournaments/actions";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
-
-/** "2026-09-11" → "sex, 11/09/2026". Sem Date(): "2026-09-11" sozinho é
- *  interpretado como UTC e vira o dia anterior em fuso negativo. */
-export function formatarData(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const [ano, mes, dia] = iso.split("-").map(Number);
-  if (!ano || !mes || !dia) return null;
-  const d = new Date(ano, mes - 1, dia);
-  const semana = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][d.getDay()];
-  return `${semana}, ${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}/${ano}`;
-}
+import { formatarData } from "@/lib/tournament-logic/display";
 
 export function TournamentDateEditor({
   tournamentId,

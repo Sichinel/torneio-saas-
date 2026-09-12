@@ -5,9 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { MatchTeam } from "@/lib/tournament-logic/types";
 import { computeGroupStandings } from "@/lib/tournament-logic/standings";
 import { QUALIFIERS_PER_GROUP, firstRoundOrigins, knockoutRoundLabel } from "@/lib/tournament-logic/knockout";
-import { formatTime, matchStatus } from "@/lib/tournament-logic/display";
+import { formatTime, formatarData, matchStatus } from "@/lib/tournament-logic/display";
 import { StandingsTable } from "@/components/tournaments/StandingsTable";
-import { formatarData } from "@/components/tournaments/TournamentDateEditor";
 import {
   MATCH_COLUMNS,
   type PublicCategory,
