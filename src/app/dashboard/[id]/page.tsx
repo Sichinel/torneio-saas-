@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { notFound, redirect } from "next/navigation";
+import { createClient, usuarioAtual } from "@/lib/supabase/server";
 import type { MatchTeam } from "@/lib/tournament-logic/types";
 import type { SetScore } from "@/lib/tournament-logic/results";
 import { computeGroupStandings } from "@/lib/tournament-logic/standings";
@@ -46,9 +46,11 @@ const byTime = (a: MatchRow, b: MatchRow) =>
 export default async function TournamentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await usuarioAtual(supabase);
+  // Sem esta linha, uma falha passageira do endpoint de auth faz o
+  // organizador receber "torneio não encontrado" no próprio torneio —
+  // o mesmo erro de diagnóstico que 45e08c7 tirou da busca pública.
+  if (!user) redirect("/login");
 
   const { data: tournament } = await supabase
     .from("tournaments")
@@ -56,7 +58,7 @@ export default async function TournamentDetailPage({ params }: { params: Promise
     .eq("id", id)
     .maybeSingle();
 
-  if (!tournament || tournament.organizer_id !== user?.id) notFound();
+  if (!tournament || tournament.organizer_id !== user.id) notFound();
 
   const { data: categories } = await supabase
     .from("categories")

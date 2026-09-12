@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { createClient, usuarioAtual } from "@/lib/supabase/server";
 import { AddPlayerForm } from "@/components/players/AddPlayerForm";
 import { PlayerRow } from "@/components/players/PlayerRow";
 import { PasteRecognize } from "@/components/players/PasteRecognize";
@@ -8,14 +9,13 @@ export const metadata = { title: "Jogadores — Torneio" };
 
 export default async function PlayersPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await usuarioAtual(supabase);
+  if (!user) redirect("/login");
 
   const { data: players } = await supabase
     .from("players")
     .select("id, name, side, phone")
-    .eq("owner_id", user!.id)
+    .eq("owner_id", user.id)
     .order("name");
 
   return (

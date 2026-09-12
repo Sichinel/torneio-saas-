@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { createClient, usuarioAtual } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
 import { formatarData } from "@/lib/tournament-logic/display";
 
@@ -7,14 +8,16 @@ export const metadata = { title: "Meus torneios — Torneio" };
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await usuarioAtual(supabase);
+  // Chegar aqui sem usuário significa que a checagem do proxy passou e a
+  // desta página não. O /login devolve pra cá sozinho se a sessão estiver
+  // de pé — e isso é bem melhor que os 500 que esta linha já causou.
+  if (!user) redirect("/login");
 
   const { data: tournaments } = await supabase
     .from("tournaments")
     .select("id, name, public_code, created_at, event_date, categories(id, format)")
-    .eq("organizer_id", user!.id)
+    .eq("organizer_id", user.id)
     .order("created_at", { ascending: false });
 
   const allCategoryIds = (tournaments ?? []).flatMap((t) => t.categories?.map((c) => c.id) ?? []);
