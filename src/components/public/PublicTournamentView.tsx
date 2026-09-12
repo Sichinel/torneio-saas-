@@ -100,8 +100,15 @@ export function PublicTournamentView({
     };
     document.addEventListener("visibilitychange", aoVoltar);
 
+    // Rede de segurança: se o socket morrer sem avisar, ou um evento se
+    // perder, a tela nunca fica mais de 25s desatualizada. Amanhã a
+    // página vai passar horas aberta em dezenas de celulares — não dá
+    // pra depender só do WebSocket se manter vivo esse tempo todo.
+    const ronda = setInterval(refetch, 25000);
+
     return () => {
       if (timer) clearTimeout(timer);
+      clearInterval(ronda);
       document.removeEventListener("visibilitychange", aoVoltar);
       supabase.removeChannel(channel);
     };
@@ -299,6 +306,7 @@ function Classificacao({
         return (
           <div key={cat.id}>
             {categories.length > 1 && <div className="pub-group">{cat.name}</div>}
+            <Classificados cat={cat} groups={catGroups} matches={matches} />
             {catGroups.map((g) => {
               const gm = matches.filter((m) => m.group_id === g.id);
               const rows = computeGroupStandings(
@@ -334,5 +342,65 @@ function Classificacao({
         Desempate nessa ordem; persistindo, confronto direto.
       </p>
     </>
+  );
+}
+
+/**
+ * Quem passou de fase. Aparece assim que o mata-mata é gerado — antes
+ * disso a classificação ainda pode virar, e cravar "classificado" com
+ * jogo por disputar seria mentira.
+ *
+ * A ordem é a mesma que gerou o chaveamento (computeGroupStandings), então
+ * o 1º e o 2º aqui são exatamente os que o cruzamento usou.
+ */
+function Classificados({
+  cat,
+  groups,
+  matches,
+}: {
+  cat: PublicCategory;
+  groups: PublicGroup[];
+  matches: PublicMatch[];
+}) {
+  const temMataMata = matches.some((m) => m.category_id === cat.id && m.stage === "bracket");
+  if (!temMataMata || cat.format !== "grupos") return null;
+
+  const porGrupo = groups.map((g) => {
+    const gm = matches.filter((m) => m.group_id === g.id);
+    const rows = computeGroupStandings(
+      gm.map((m) => ({
+        teamA: m.team_a,
+        teamB: m.team_b,
+        sets: m.sets,
+        completed: m.completed,
+        winnerSide: m.winner_side,
+      })),
+    );
+    return { grupo: g.name, times: rows.slice(0, QUALIFIERS_PER_GROUP) };
+  });
+
+  if (porGrupo.every((g) => g.times.length === 0)) return null;
+
+  return (
+    <div className="pub-qualificados panel glass">
+      <div className="pub-qualificados-titulo">
+        <span className="badge done">Classificados</span>
+        <span>Avançaram para o mata-mata</span>
+      </div>
+      <div className="pub-qualificados-grade">
+        {porGrupo.map((g) => (
+          <div key={g.grupo} className="pub-qualificados-grupo">
+            <div className="rotulo">{g.grupo}</div>
+            <ol>
+              {g.times.map((t, i) => (
+                <li key={t.entryId}>
+                  <span className="pos">{i + 1}º</span> {t.name}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

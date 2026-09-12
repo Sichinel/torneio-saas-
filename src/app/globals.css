@@ -1401,3 +1401,53 @@ textarea {
     line-height: 1.5;
   }
 }
+
+@layer components {
+  /* Classificados para o mata-mata, na aba Classificação. */
+  .pub-qualificados {
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    border-radius: 16px;
+  }
+  .pub-qualificados-titulo {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+  .pub-qualificados-grade {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+  }
+  @media (max-width: 420px) {
+    .pub-qualificados-grade {
+      grid-template-columns: 1fr;
+    }
+  }
+  .pub-qualificados-grupo .rotulo {
+    font-family: var(--font-display), "Space Grotesk", sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+  .pub-qualificados-grupo ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .pub-qualificados-grupo li {
+    font-size: 15px;
+    line-height: 1.45;
+    display: flex;
+    gap: 7px;
+  }
+  .pub-qualificados-grupo .pos {
+    color: var(--accent-deep);
+    font-weight: 700;
+    flex: none;
+  }
+}

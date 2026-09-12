@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { PublicTournamentView } from "@/components/public/PublicTournamentView";
 import {
@@ -10,6 +11,34 @@ import {
 
 type Props = { params: Promise<{ code: string }> };
 
+/**
+ * Busca o torneio distinguindo "não existe" de "não deu pra buscar".
+ *
+ * Sem isso, qualquer falha transitória vira 404: o espectador lê
+ * "torneio não encontrado" e conclui que o código está errado, quando o
+ * problema era uma conexão que piscou. Erro de verdade sobe como
+ * exceção e cai no error.tsx, que tenta de novo sozinho.
+ */
+async function buscarTorneio(supabase: SupabaseClient, code: string) {
+  let ultimoErro: unknown = null;
+
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const { data, error } = await supabase
+      .from("tournaments")
+      .select("id, name, courts, start_time")
+      .eq("public_code", code)
+      .maybeSingle();
+
+    if (!error) return { encontrado: data };
+
+    ultimoErro = error;
+    console.error(`/t/${code}: busca do torneio falhou (tentativa ${tentativa + 1})`, error);
+    await new Promise((r) => setTimeout(r, 150 * (tentativa + 1)));
+  }
+
+  throw new Error(`Não foi possível carregar o torneio ${code}: ${String(ultimoErro)}`);
+}
+
 export async function generateMetadata({ params }: Props) {
   const { code } = await params;
   const supabase = await createClient();
@@ -19,7 +48,7 @@ export async function generateMetadata({ params }: Props) {
     .eq("public_code", code)
     .maybeSingle();
 
-  return { title: data ? `${data.name} — ao vivo` : "Torneio não encontrado" };
+  return { title: data ? `${data.name} — ao vivo` : "Torneio" };
 }
 
 /**
@@ -36,12 +65,9 @@ export default async function PublicTournamentPage({ params }: Props) {
   const { code } = await params;
   const supabase = await createClient();
 
-  const { data: tournament } = await supabase
-    .from("tournaments")
-    .select("id, name, courts, start_time")
-    .eq("public_code", code)
-    .maybeSingle();
+  const { encontrado: tournament } = await buscarTorneio(supabase, code);
 
+  // Só aqui é 404 de verdade: a busca funcionou e não existe esse código.
   if (!tournament) notFound();
 
   const { data: categories } = await supabase
@@ -52,6 +78,8 @@ export default async function PublicTournamentPage({ params }: Props) {
 
   const categoryIds = (categories ?? []).map((c) => c.id);
 
+  // Sem filtro de stage: grupos e mata-mata vêm juntos, e é o cliente que
+  // decide como agrupar.
   const [{ data: groups }, { data: matches }] = await Promise.all([
     categoryIds.length
       ? supabase.from("groups").select("id, category_id, name").in("category_id", categoryIds)
@@ -71,7 +99,7 @@ export default async function PublicTournamentPage({ params }: Props) {
       }}
       categories={(categories ?? []) as PublicCategory[]}
       groups={(groups ?? []) as PublicGroup[]}
-      initialMatches={((matches ?? []) as PublicMatch[])}
+      initialMatches={(matches ?? []) as PublicMatch[]}
     />
   );
 }
