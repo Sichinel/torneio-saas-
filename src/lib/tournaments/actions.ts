@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { fail, type ActionResult } from "@/lib/actions/result";
+import { fail, ok, type ActionResult } from "@/lib/actions/result";
 import { buildEntriesForCategory } from "./build-entries";
 import { toPlayerBank } from "./resolve-entries";
 import { buildCategory } from "@/lib/tournament-logic/build-category";
@@ -208,4 +208,59 @@ export async function deleteTournament(
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+/**
+ * Define (ou limpa) a data do torneio.
+ *
+ * Só rótulo: não encosta em `start_time` nem nos horários dos jogos. A
+ * grade continua saindo de start_time + duração, exatamente como antes —
+ * mudar o dia de um torneio não é motivo pra reagendar nada.
+ */
+export async function updateTournamentDate(
+  tournamentId: string,
+  _prevState: ActionResult | undefined,
+  formData: FormData,
+): Promise<ActionResult> {
+  if (typeof tournamentId !== "string" || !tournamentId) return fail("Torneio inválido.");
+
+  const bruto = String(formData.get("event_date") ?? "").trim();
+  // Campo vazio limpa a data — é como o organizador desfaz um engano.
+  const data = bruto === "" ? null : bruto;
+  if (data !== null && !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    return fail("Data inválida.");
+  }
+  if (data !== null && Number.isNaN(new Date(`${data}T00:00:00`).getTime())) {
+    return fail("Essa data não existe.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Sessão expirada. Atualize a página e faça login de novo.");
+
+  // O .eq no organizer_id é a trava real: sem ele, qualquer id de torneio
+  // vindo do cliente seria editável (a RLS também barra, mas não dependo
+  // de uma camada só para isso).
+  const { data: atualizado, error } = await supabase
+    .from("tournaments")
+    .update({ event_date: data })
+    .eq("id", tournamentId)
+    .eq("organizer_id", user.id)
+    .select("id, event_date");
+
+  if (error) {
+    console.error("updateTournamentDate: update failed", error);
+    return fail(`Não foi possível salvar a data: ${error.message}`);
+  }
+  if (!atualizado?.length) return fail("Torneio não encontrado (ou você não é o organizador).");
+
+  revalidatePath(`/dashboard/${tournamentId}`);
+  revalidatePath("/dashboard");
+
+  const { data: t } = await supabase.from("tournaments").select("public_code").eq("id", tournamentId).maybeSingle();
+  if (t?.public_code) revalidatePath(`/t/${t.public_code}`);
+
+  return ok(data ? "Data do torneio atualizada." : "Data removida.");
 }

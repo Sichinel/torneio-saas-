@@ -13,6 +13,7 @@ import { MatchEditor } from "@/components/tournaments/MatchEditor";
 import { KnockoutControls } from "@/components/tournaments/KnockoutControls";
 import { StandingsTable } from "@/components/tournaments/StandingsTable";
 import { GroupEditor, type GrupoComDuplas } from "@/components/tournaments/GroupEditor";
+import { TournamentDateEditor } from "@/components/tournaments/TournamentDateEditor";
 
 export const metadata = { title: "Torneio — Torneio" };
 
@@ -51,7 +52,7 @@ export default async function TournamentDetailPage({ params }: { params: Promise
 
   const { data: tournament } = await supabase
     .from("tournaments")
-    .select("id, name, public_code, courts, start_time, organizer_id")
+    .select("id, name, public_code, courts, start_time, organizer_id, event_date")
     .eq("id", id)
     .maybeSingle();
 
@@ -125,6 +126,7 @@ export default async function TournamentDetailPage({ params }: { params: Promise
         <span className="t-card-meta">
           {courts.length} quadra(s) · início {tournament.start_time?.slice(0, 5)}
         </span>
+        <TournamentDateEditor tournamentId={tournament.id} eventDate={tournament.event_date ?? null} />
       </div>
 
       {conflicts.size > 0 && (

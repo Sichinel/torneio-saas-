@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/auth/actions";
+import { formatarData } from "@/components/tournaments/TournamentDateEditor";
 
 export const metadata = { title: "Meus torneios — Torneio" };
 
@@ -12,7 +13,7 @@ export default async function DashboardPage() {
 
   const { data: tournaments } = await supabase
     .from("tournaments")
-    .select("id, name, public_code, created_at, categories(id, format)")
+    .select("id, name, public_code, created_at, event_date, categories(id, format)")
     .eq("organizer_id", user!.id)
     .order("created_at", { ascending: false });
 
@@ -58,6 +59,7 @@ export default async function DashboardPage() {
               <Link className="t-card glass" key={t.id} href={`/dashboard/${t.id}`}>
                 <div className="t-card-name">{t.name}</div>
                 <div className="t-card-meta">
+                  {t.event_date ? `${formatarData(t.event_date)} · ` : ""}
                   {t.categories?.length ?? 0} categoria(s) · código{" "}
                   <code
                     style={{

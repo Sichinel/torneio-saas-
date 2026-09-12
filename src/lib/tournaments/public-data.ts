@@ -36,4 +36,5 @@ export type PublicTournament = {
   name: string;
   courts: string[];
   start_time: string | null;
+  event_date: string | null;
 };

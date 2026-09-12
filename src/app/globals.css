@@ -1668,3 +1668,32 @@ textarea {
     flex-wrap: wrap;
   }
 }
+
+@layer components {
+  /* Data do torneio (cabeçalho do dashboard), em linha com o resto. */
+  .data-torneio {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .data-torneio .valor {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .data-torneio .vazio {
+    font-style: italic;
+  }
+  .data-torneio input[type="date"] {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    min-height: 40px;
+  }
+}

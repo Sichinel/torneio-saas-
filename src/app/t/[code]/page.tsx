@@ -25,7 +25,7 @@ async function buscarTorneio(supabase: SupabaseClient, code: string) {
   for (let tentativa = 0; tentativa < 3; tentativa++) {
     const { data, error } = await supabase
       .from("tournaments")
-      .select("id, name, courts, start_time")
+      .select("id, name, courts, start_time, event_date")
       .eq("public_code", code)
       .maybeSingle();
 
@@ -96,6 +96,7 @@ export default async function PublicTournamentPage({ params }: Props) {
         name: tournament.name,
         courts: tournament.courts ?? [],
         start_time: tournament.start_time,
+        event_date: tournament.event_date ?? null,
       }}
       categories={(categories ?? []) as PublicCategory[]}
       groups={(groups ?? []) as PublicGroup[]}
