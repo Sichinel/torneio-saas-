@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { MatchTeam } from "@/lib/tournament-logic/types";
 import { computeGroupStandings } from "@/lib/tournament-logic/standings";
@@ -18,6 +18,7 @@ import {
 /** Aba aberta. Tipo explícito em vez de string mágica: nome de quadra
  *  vem do organizador e não pode colidir com uma seção fixa. */
 type Aba =
+  | { kind: "grade" }
   | { kind: "quadra"; court: string }
   | { kind: "sem-quadra" }
   | { kind: "mata-mata" }
@@ -27,6 +28,7 @@ const mesmaAba = (a: Aba, b: Aba) =>
   a.kind === b.kind && (a.kind !== "quadra" || b.kind !== "quadra" || a.court === b.court);
 
 const ROTULOS: Record<Exclude<Aba["kind"], "quadra">, string> = {
+  grade: "Grade",
   "sem-quadra": "Sem quadra",
   "mata-mata": "Mata-mata",
   classificacao: "Classificação",
@@ -127,6 +129,9 @@ export function PublicTournamentView({
   const temSemQuadra = matches.some((m) => !m.court);
   const temMataMata = matches.some((m) => m.stage === "bracket");
   const abas: Aba[] = [
+    // Primeira porque é a que responde "quando eu jogo?" sem mais nenhum
+    // toque — e, sendo a primeira, é a que abre.
+    { kind: "grade" },
     ...courts.map((c): Aba => ({ kind: "quadra", court: c })),
     ...(temSemQuadra ? [{ kind: "sem-quadra" } as Aba] : []),
     // Só aparece depois que a chave existe: antes disso não há o que ver.
@@ -163,12 +168,15 @@ export function PublicTournamentView({
     [groupById, roundsByCat],
   );
 
+  // Só as abas de quadra listam jogos soltos; as demais têm componente
+  // próprio. Positivo em vez de negativo pra que uma aba nova não passe
+  // a cair aqui por esquecimento.
   const jogosDaAba =
-    abaAtual.kind === "classificacao" || abaAtual.kind === "mata-mata"
-      ? []
-      : matches
+    abaAtual.kind === "quadra" || abaAtual.kind === "sem-quadra"
+      ? matches
           .filter((m) => (abaAtual.kind === "sem-quadra" ? !m.court : m.court === abaAtual.court))
-          .sort(byTime);
+          .sort(byTime)
+      : [];
 
   return (
     <div className="pub">
@@ -199,7 +207,14 @@ export function PublicTournamentView({
         ))}
       </div>
 
-      {abaAtual.kind === "classificacao" ? (
+      {abaAtual.kind === "grade" ? (
+        <GradeCompleta
+          courts={courts}
+          matches={matches}
+          rotulo={rotulo}
+          categorias={categories.length > 1 ? catById : null}
+        />
+      ) : abaAtual.kind === "classificacao" ? (
         <Classificacao categories={categories} groups={groups} matches={matches} />
       ) : abaAtual.kind === "mata-mata" ? (
         <MataMata categories={categories} groups={groups} matches={matches} />
@@ -221,6 +236,173 @@ export function PublicTournamentView({
         <br />
         Não precisa recarregar a página.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Aba "Grade": o dia inteiro de uma vez — uma linha por horário, uma
+ * coluna por quadra. É a única visão que responde "quando eu jogo?" e "o
+ * que está rolando agora?" sem trocar de aba, e por isso é a que abre.
+ *
+ * Em tela larga é tabela mesmo: horário à esquerda, quadras lado a lado.
+ * No celular, que é onde ela vive, as quadras empilham dentro do
+ * horário. Duas colunas de nome de dupla não cabem em 390px — "Guilherme
+ * Bouchet / Valdenir" em metade de 390px sai em fonte que precisa de
+ * zoom, e zoom na beira da quadra ninguém dá. Mesmo DOM nos dois casos,
+ * só o grid muda.
+ *
+ * As colunas saem das quadras do torneio, mas um jogo cuja quadra foi
+ * renomeada (ou apagada) ganha coluna própria em vez de sumir da grade:
+ * jogo invisível na véspera é pior do que uma coluna a mais.
+ */
+function GradeCompleta({
+  courts,
+  matches,
+  rotulo,
+  categorias,
+}: {
+  courts: string[];
+  matches: PublicMatch[];
+  rotulo: (m: PublicMatch) => string;
+  /** só quando o torneio tem mais de uma categoria; senão o nome é ruído */
+  categorias: Map<string, PublicCategory> | null;
+}) {
+  const comHorario = matches.filter((m) => m.scheduled_time);
+  if (comHorario.length === 0) {
+    return <div className="empty glass">Os jogos ainda não têm horário.</div>;
+  }
+
+  const horarios = [...new Set(comHorario.map((m) => m.scheduled_time as string))].sort();
+
+  const extras = [...new Set(comHorario.map((m) => m.court))]
+    .filter((c): c is string => !!c && !courts.includes(c))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const colunas: (string | null)[] = [
+    ...courts,
+    ...extras,
+    ...(comHorario.some((m) => !m.court) ? [null] : []),
+  ];
+
+  // O número de colunas só importa a partir de 560px, e media query não
+  // lê prop — daí a variável CSS.
+  const estilo = { "--colunas": colunas.length } as CSSProperties;
+  const chaveColuna = (c: string | null) => c ?? "sem-quadra";
+
+  return (
+    <div className="pub-grade">
+      <div className="pub-grade-cab" style={estilo}>
+        <span />
+        {colunas.map((c) => (
+          <span key={chaveColuna(c)}>{c ?? "Sem quadra"}</span>
+        ))}
+      </div>
+
+      {horarios.map((h) => (
+        <div key={h} className="pub-grade-slot" style={estilo}>
+          <div className="pub-grade-hora">{formatTime(h)}</div>
+          {colunas.map((col) => {
+            const jogos = comHorario.filter(
+              (m) => m.scheduled_time === h && (col === null ? !m.court : m.court === col),
+            );
+            return (
+              <div key={chaveColuna(col)} className="pub-grade-col">
+                {jogos.length === 0 ? (
+                  <div className="pub-grade-celula vazia">
+                    <span className="pub-grade-quadra">{col ?? "Sem quadra"}</span>
+                    <span className="livre">livre</span>
+                  </div>
+                ) : (
+                  // Mais de um jogo na mesma quadra e horário não deveria
+                  // acontecer, mas acontece (remarcação manual). Mostra os
+                  // dois em vez de esconder um.
+                  jogos.map((m) => (
+                    <GradeCelula
+                      key={m.id}
+                      match={m}
+                      quadra={col}
+                      rotulo={rotulo(m)}
+                      categoria={categorias?.get(m.category_id)?.name}
+                    />
+                  ))
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GradeCelula({
+  match,
+  quadra,
+  rotulo,
+  categoria,
+}: {
+  match: PublicMatch;
+  quadra: string | null;
+  rotulo: string;
+  categoria?: string;
+}) {
+  const status = matchStatus(match);
+  const sets = (match.sets ?? []).filter((s) => s.a !== null && s.b !== null);
+
+  return (
+    <div className={`pub-grade-celula ${status === "andamento" ? "is-live" : ""}`}>
+      <div className="pub-grade-celula-top">
+        <span className="pub-grade-quadra">{quadra ?? "Sem quadra"}</span>
+        {rotulo && <span className="rot">{rotulo}</span>}
+        {categoria && <span className="rot">{categoria}</span>}
+        {status === "andamento" && (
+          <span className="badge live">
+            <span className="status-dot" />
+            Ao vivo
+          </span>
+        )}
+        {status === "finalizado" && <span className="rot">Fim</span>}
+      </div>
+
+      <GradeLado
+        team={match.team_a}
+        games={sets.map((s) => s.a)}
+        contra={sets.map((s) => s.b)}
+        venceu={match.winner_side === "A"}
+      />
+      <GradeLado
+        team={match.team_b}
+        games={sets.map((s) => s.b)}
+        contra={sets.map((s) => s.a)}
+        venceu={match.winner_side === "B"}
+      />
+    </div>
+  );
+}
+
+function GradeLado({
+  team,
+  games,
+  contra,
+  venceu,
+}: {
+  team: MatchTeam;
+  games: (number | null)[];
+  contra: (number | null)[];
+  venceu: boolean;
+}) {
+  return (
+    <div className="pub-grade-linha">
+      <span className={`nome ${venceu ? "win" : ""} ${team?.bye ? "bye" : ""}`}>{teamLabel(team)}</span>
+      {games.length > 0 && (
+        <span className="games">
+          {games.map((g, i) => (
+            <span key={i} className={`g ${(g ?? 0) > (contra[i] ?? 0) ? "win" : ""}`}>
+              {g}
+            </span>
+          ))}
+        </span>
+      )}
     </div>
   );
 }

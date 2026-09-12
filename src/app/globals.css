@@ -1501,9 +1501,133 @@ textarea {
 }
 
 @layer components {
+  /* Aba "Grade": o dia inteiro, uma linha por horário.
+
+     Celular (padrão): as quadras empilham dentro do horário. Duas
+     colunas de nome de dupla em 390px só cabem em fonte que exige zoom.
+     De 560px pra cima vira tabela de verdade, com as quadras lado a lado
+     e o horário na coluna da esquerda. É o mesmo DOM nos dois casos — o
+     nome da quadra aparece dentro da célula no celular e no cabeçalho na
+     tela larga, nunca nos dois ao mesmo tempo. */
+  .pub-grade-cab {
+    display: none;
+  }
+  .pub-grade-slot {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .pub-grade-hora {
+    font-family: var(--font-display), "Space Grotesk", sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+  }
+  .pub-grade-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .pub-grade-celula {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 11px;
+    min-width: 0;
+  }
+  .pub-grade-celula.is-live {
+    border-color: rgba(79, 168, 255, 0.55);
+    background: rgba(79, 168, 255, 0.06);
+  }
+  .pub-grade-celula.vazia {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-style: dashed;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+  .pub-grade-celula-top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin-bottom: 5px;
+  }
+  .pub-grade-quadra {
+    font-weight: 700;
+  }
+  .pub-grade-linha {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 1px 0;
+  }
+  .pub-grade-linha .nome {
+    flex: 1;
+    min-width: 0;
+    font-size: 14.5px;
+    line-height: 1.32;
+  }
+  .pub-grade-linha .nome.win {
+    font-weight: 700;
+  }
+  .pub-grade-linha .nome.bye {
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+  .pub-grade-linha .games {
+    display: flex;
+    gap: 6px;
+    flex: none;
+  }
+  .pub-grade-linha .games .g {
+    min-width: 13px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  .pub-grade-linha .games .g.win {
+    color: var(--ink);
+  }
+
+  @media (min-width: 560px) {
+    .pub-grade-cab,
+    .pub-grade-slot {
+      grid-template-columns: 58px repeat(var(--colunas, 2), minmax(0, 1fr));
+    }
+    .pub-grade-cab {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding-left: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-soft);
+    }
+    /* Células da mesma faixa com a mesma altura: quando um nome quebra
+       em duas linhas, a linha continua se lendo como linha de tabela. */
+    .pub-grade-celula {
+      flex: 1;
+    }
+    .pub-grade-quadra {
+      display: none;
+    }
+  }
+}
+
+@layer components {
   /* Com a 4ª aba (Mata-mata), o conjunto não cabe mais em 390px no
      tamanho original. Aperta em telas estreitas em vez de empurrar a
-     última aba pra fora do campo de visão. */
+     última aba pra fora do campo de visão. Com Grade + 2 quadras +
+     Mata-mata + Classificação nem assim cabe: a barra rola, e é por isso
+     que o rótulo é "Grade" e não "Grade completa". */
   @media (max-width: 480px) {
     .pub-tabs {
       gap: 3px;
