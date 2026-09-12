@@ -134,3 +134,30 @@ export function planBracketAdvance(
   }
   return { ok: true, change: { nextId: next.id, side, team } };
 }
+
+/**
+ * De onde sai cada confronto da 1ª rodada — "1º Grupo A", "2º Grupo B" —
+ * na mesma ordem de slots que `crossGroupsFirstRound` produz.
+ *
+ * Mora aqui de propósito, colado na função que monta os pares: se o
+ * cruzamento mudar, os rótulos têm que mudar no mesmo arquivo, senão a
+ * página pública passa a mentir sobre quem enfrenta quem.
+ */
+export function firstRoundOrigins(groupNames: string[], qualifiers: number): [string, string][] {
+  const ordered = [...groupNames].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const top: [string, string][] = [];
+  const bottom: [string, string][] = [];
+
+  for (let i = 0; i < ordered.length; i += 2) {
+    const x = ordered[i];
+    const y = ordered[i + 1];
+    if (y === undefined) break;
+    if (qualifiers === 1) {
+      top.push([`1º ${x}`, `1º ${y}`]);
+    } else {
+      top.push([`1º ${x}`, `2º ${y}`]);
+      bottom.push([`1º ${y}`, `2º ${x}`]);
+    }
+  }
+  return [...top, ...bottom];
+}

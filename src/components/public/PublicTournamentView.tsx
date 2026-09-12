@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { MatchTeam } from "@/lib/tournament-logic/types";
 import { computeGroupStandings } from "@/lib/tournament-logic/standings";
-import { QUALIFIERS_PER_GROUP, knockoutRoundLabel } from "@/lib/tournament-logic/knockout";
+import { QUALIFIERS_PER_GROUP, firstRoundOrigins, knockoutRoundLabel } from "@/lib/tournament-logic/knockout";
 import { formatTime, matchStatus } from "@/lib/tournament-logic/display";
 import { StandingsTable } from "@/components/tournaments/StandingsTable";
 import {
@@ -17,13 +17,22 @@ import {
 
 /** Aba aberta. Tipo explícito em vez de string mágica: nome de quadra
  *  vem do organizador e não pode colidir com uma seção fixa. */
-type Aba = { kind: "quadra"; court: string } | { kind: "sem-quadra" } | { kind: "classificacao" };
+type Aba =
+  | { kind: "quadra"; court: string }
+  | { kind: "sem-quadra" }
+  | { kind: "mata-mata" }
+  | { kind: "classificacao" };
 
 const mesmaAba = (a: Aba, b: Aba) =>
   a.kind === b.kind && (a.kind !== "quadra" || b.kind !== "quadra" || a.court === b.court);
 
-const rotuloAba = (a: Aba) =>
-  a.kind === "quadra" ? a.court : a.kind === "sem-quadra" ? "Sem quadra" : "Classificação";
+const ROTULOS: Record<Exclude<Aba["kind"], "quadra">, string> = {
+  "sem-quadra": "Sem quadra",
+  "mata-mata": "Mata-mata",
+  classificacao: "Classificação",
+};
+
+const rotuloAba = (a: Aba) => (a.kind === "quadra" ? a.court : ROTULOS[a.kind]);
 
 const chaveAba = (a: Aba) => (a.kind === "quadra" ? `quadra:${a.court}` : a.kind);
 
@@ -116,9 +125,12 @@ export function PublicTournamentView({
 
   const courts = tournament.courts ?? [];
   const temSemQuadra = matches.some((m) => !m.court);
+  const temMataMata = matches.some((m) => m.stage === "bracket");
   const abas: Aba[] = [
     ...courts.map((c): Aba => ({ kind: "quadra", court: c })),
     ...(temSemQuadra ? [{ kind: "sem-quadra" } as Aba] : []),
+    // Só aparece depois que a chave existe: antes disso não há o que ver.
+    ...(temMataMata ? [{ kind: "mata-mata" } as Aba] : []),
     { kind: "classificacao" },
   ];
 
@@ -152,7 +164,7 @@ export function PublicTournamentView({
   );
 
   const jogosDaAba =
-    abaAtual.kind === "classificacao"
+    abaAtual.kind === "classificacao" || abaAtual.kind === "mata-mata"
       ? []
       : matches
           .filter((m) => (abaAtual.kind === "sem-quadra" ? !m.court : m.court === abaAtual.court))
@@ -189,6 +201,8 @@ export function PublicTournamentView({
 
       {abaAtual.kind === "classificacao" ? (
         <Classificacao categories={categories} groups={groups} matches={matches} />
+      ) : abaAtual.kind === "mata-mata" ? (
+        <MataMata categories={categories} groups={groups} matches={matches} />
       ) : jogosDaAba.length === 0 ? (
         <div className="empty glass">Nenhum jogo nesta quadra ainda.</div>
       ) : (
@@ -401,6 +415,186 @@ function Classificados({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Chaveamento: todos os jogos de mata-mata juntos, em ordem de rodada,
+ * independente da quadra em que caíram.
+ *
+ * Empilhado na vertical de propósito. Chave desenhada em colunas só cabe
+ * numa tela larga, e amanhã isso vai ser lido em 390px — com scroll
+ * lateral ninguém acompanha nada. Cada jogo diz de onde vêm os dois
+ * lados, então a chave se lê de cima pra baixo mesmo antes de qualquer
+ * resultado sair.
+ */
+function MataMata({
+  categories,
+  groups,
+  matches,
+}: {
+  categories: PublicCategory[];
+  groups: PublicGroup[];
+  matches: PublicMatch[];
+}) {
+  const comChave = categories.filter((c) =>
+    matches.some((m) => m.category_id === c.id && m.stage === "bracket"),
+  );
+
+  if (comChave.length === 0) {
+    return <div className="empty glass">O mata-mata ainda não começou.</div>;
+  }
+
+  return (
+    <>
+      {comChave.map((cat) => {
+        const chave = matches
+          .filter((m) => m.category_id === cat.id && m.stage === "bracket")
+          .sort((a, b) => (a.round ?? 0) - (b.round ?? 0) || (a.bracket_slot ?? 0) - (b.bracket_slot ?? 0));
+
+        const totalRodadas = Math.max(...chave.map((m) => m.round ?? 0)) + 1;
+        const nomesGrupos = groups.filter((g) => g.category_id === cat.id).map((g) => g.name);
+        const origens = firstRoundOrigins(nomesGrupos, QUALIFIERS_PER_GROUP);
+
+        // Numeração por rodada ("Jogo 1"), pra poder dizer de onde vem
+        // quem ainda não foi definido.
+        const numeroNaRodada = new Map<string, number>();
+        for (let r = 0; r < totalRodadas; r++) {
+          chave
+            .filter((m) => (m.round ?? 0) === r)
+            .forEach((m, i) => numeroNaRodada.set(m.id, i + 1));
+        }
+
+        const origemDoLado = (m: PublicMatch, lado: "A" | "B"): string => {
+          const round = m.round ?? 0;
+          const slot = m.bracket_slot ?? 0;
+          if (round === 0) {
+            const par = origens[slot];
+            if (!par) return "";
+            return lado === "A" ? par[0] : par[1];
+          }
+          // Round r slot s é alimentado pelos slots 2s e 2s+1 da anterior.
+          const alimentador = chave.find(
+            (x) => (x.round ?? 0) === round - 1 && (x.bracket_slot ?? 0) === slot * 2 + (lado === "A" ? 0 : 1),
+          );
+          const num = alimentador ? numeroNaRodada.get(alimentador.id) : undefined;
+          const rodadaAnterior = knockoutRoundLabel(round - 1, totalRodadas);
+          return num ? `Vencedor do jogo ${num} (${rodadaAnterior.toLowerCase()})` : "A definir";
+        };
+
+        const rodadas = Array.from({ length: totalRodadas }, (_, r) =>
+          chave.filter((m) => (m.round ?? 0) === r),
+        );
+
+        return (
+          <div key={cat.id}>
+            {categories.length > 1 && <div className="pub-group">{cat.name}</div>}
+            {rodadas.map((jogos, r) => (
+              <div key={r} className="pub-rodada">
+                <div className="pub-rodada-titulo">
+                  {knockoutRoundLabel(r, totalRodadas)}
+                  <span className="conta">
+                    {jogos.filter((m) => m.completed).length}/{jogos.length}
+                  </span>
+                </div>
+                {jogos.map((m) => (
+                  <ChaveCard
+                    key={m.id}
+                    match={m}
+                    numero={numeroNaRodada.get(m.id) ?? 0}
+                    origemA={origemDoLado(m, "A")}
+                    origemB={origemDoLado(m, "B")}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function ChaveCard({
+  match,
+  numero,
+  origemA,
+  origemB,
+}: {
+  match: PublicMatch;
+  numero: number;
+  origemA: string;
+  origemB: string;
+}) {
+  const status = matchStatus(match);
+  const sets = (match.sets ?? []).filter((s) => s.a !== null && s.b !== null);
+
+  return (
+    <div className={`match glass pub-chave ${status === "andamento" ? "is-live" : ""}`}>
+      <div className="pub-match-top">
+        <span className="pub-chave-num">Jogo {numero}</span>
+        <span className="pub-time">{formatTime(match.scheduled_time)}</span>
+        {match.court && <span className="badge">{match.court}</span>}
+        {status === "andamento" && (
+          <span className="badge live">
+            <span className="status-dot" />
+            Ao vivo
+          </span>
+        )}
+        {status === "finalizado" && <span className="badge done">Fim</span>}
+      </div>
+
+      <ChaveLado
+        team={match.team_a}
+        origem={origemA}
+        games={sets.map((s) => s.a)}
+        contra={sets.map((s) => s.b)}
+        venceu={match.winner_side === "A"}
+      />
+      <ChaveLado
+        team={match.team_b}
+        origem={origemB}
+        games={sets.map((s) => s.b)}
+        contra={sets.map((s) => s.a)}
+        venceu={match.winner_side === "B"}
+      />
+    </div>
+  );
+}
+
+function ChaveLado({
+  team,
+  origem,
+  games,
+  contra,
+  venceu,
+}: {
+  team: MatchTeam;
+  origem: string;
+  games: (number | null)[];
+  contra: (number | null)[];
+  venceu: boolean;
+}) {
+  const definido = !!team && !team.bye;
+
+  return (
+    <div className="pub-row">
+      <div className="pub-chave-lado">
+        <div className={`pub-team ${venceu ? "win" : ""} ${definido ? "" : "indefinido"}`}>
+          {definido ? teamLabel(team) : "A definir"}
+        </div>
+        {origem && <div className="pub-chave-origem">{origem}</div>}
+      </div>
+      {games.length > 0 ? (
+        <div className="pub-sets">
+          {games.map((g, i) => (
+            <span key={i} className={`pub-set ${(g ?? 0) > (contra[i] ?? 0) ? "win" : ""}`}>
+              {g}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
