@@ -12,6 +12,7 @@ import { DeleteTournamentButton } from "@/components/tournaments/DeleteTournamen
 import { MatchEditor } from "@/components/tournaments/MatchEditor";
 import { KnockoutControls } from "@/components/tournaments/KnockoutControls";
 import { StandingsTable } from "@/components/tournaments/StandingsTable";
+import { GroupEditor, type GrupoComDuplas } from "@/components/tournaments/GroupEditor";
 
 export const metadata = { title: "Torneio — Torneio" };
 
@@ -63,7 +64,7 @@ export default async function TournamentDetailPage({ params }: { params: Promise
     .order("created_at");
 
   const categoryIds = (categories ?? []).map((c) => c.id);
-  const [{ data: groups }, { data: matchData }] = await Promise.all([
+  const [{ data: groups }, { data: matchData }, { data: groupEntries }] = await Promise.all([
     categoryIds.length
       ? supabase.from("groups").select("id, category_id, name").in("category_id", categoryIds)
       : Promise.resolve({ data: [] as { id: string; category_id: string; name: string }[] }),
@@ -73,6 +74,9 @@ export default async function TournamentDetailPage({ params }: { params: Promise
           .select("id, category_id, group_id, stage, round, bracket_slot, court, scheduled_time, team_a, team_b, sets, completed, winner_side")
           .in("category_id", categoryIds)
       : Promise.resolve({ data: [] as MatchRow[] }),
+    categoryIds.length
+      ? supabase.from("group_entries").select("group_id, entry_id")
+      : Promise.resolve({ data: [] as { group_id: string; entry_id: string }[] }),
   ]);
   const matches = (matchData ?? []) as MatchRow[];
   const courts: string[] = tournament.courts ?? [];
@@ -83,6 +87,15 @@ export default async function TournamentDetailPage({ params }: { params: Promise
     ]),
   );
   const conflicts = findScheduleConflicts(scheduledMatchesFromRows(matches, (id) => durationByCat.get(id) ?? 40));
+
+  // Nome de cada dupla vem desnormalizado nos jogos; é o que o editor de
+  // grupos mostra, sem precisar ler entries + players de novo.
+  const nomeDaDupla = new Map<string, string>();
+  matches.forEach((m) => {
+    [m.team_a, m.team_b].forEach((t) => {
+      if (t?.entryId && !t.bye) nomeDaDupla.set(t.entryId, t.name);
+    });
+  });
 
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "22px 16px 100px" }}>
@@ -155,6 +168,22 @@ export default async function TournamentDetailPage({ params }: { params: Promise
             </div>
 
             {catMatches.length === 0 && <div className="hint">Nenhuma partida gerada ainda.</div>}
+
+            {cat.format === "grupos" && catGroups.length > 1 && (
+              <GroupEditor
+                categoryId={cat.id}
+                grupos={catGroups.map(
+                  (g): GrupoComDuplas => ({
+                    id: g.id,
+                    name: g.name,
+                    duplas: (groupEntries ?? [])
+                      .filter((ge) => ge.group_id === g.id)
+                      .map((ge) => ({ entryId: ge.entry_id, name: nomeDaDupla.get(ge.entry_id) ?? "Dupla" }))
+                      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+                  }),
+                )}
+              />
+            )}
 
             {catGroups.map((g) => {
               const gm = groupMatches.filter((m) => m.group_id === g.id);

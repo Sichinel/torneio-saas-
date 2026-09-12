@@ -1515,3 +1515,32 @@ textarea {
     }
   }
 }
+
+@layer components {
+  /* Editor manual dos grupos (dashboard). */
+  .grupo-editor {
+    margin-bottom: 20px;
+  }
+  .grupo-editor-bloco {
+    margin-bottom: 16px;
+  }
+  .grupo-editor-linha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .grupo-editor-linha .nome {
+    flex: 1;
+    min-width: 140px;
+    font-size: 15px;
+  }
+  .grupo-editor-linha .destinos {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+}

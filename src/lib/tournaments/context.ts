@@ -68,3 +68,4 @@ export function revalidateTournament(t: TournamentContext["tournament"]) {
   revalidatePath(`/dashboard/${t.id}`);
   revalidatePath(`/t/${t.public_code}`);
 }
+

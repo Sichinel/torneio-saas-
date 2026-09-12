@@ -13,3 +13,12 @@ export function ok(message?: string): ActionResult {
 export function fail(error: string): ActionResult {
   return { ok: false, error };
 }
+
+/**
+ * Prefixo com que uma action sinaliza "isto é destrutivo, confirme"
+ * em vez de só falhar. Vive aqui porque precisa ser lido pelo cliente e
+ * pelo servidor: um arquivo "use server" só exporta funções async, e
+ * qualquer módulo que toque next/headers não pode entrar no bundle do
+ * navegador.
+ */
+export const PRECISA_CONFIRMAR = "PRECISA_CONFIRMAR:";
