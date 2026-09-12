@@ -1,4 +1,5 @@
 import { formatTime } from "./display";
+import { REST_SLOTS } from "./schedule";
 import type { MatchTeam } from "./types";
 
 export type ScheduledMatch = {
@@ -63,7 +64,25 @@ export function findScheduleConflicts(matches: ScheduledMatch[]): Map<string, st
       const x = timed[i];
       const y = timed[j];
       if (x.completed && y.completed) continue;
-      if (!(x.start < y.end && y.start < x.end)) continue;
+
+      if (!(x.start < y.end && y.start < x.end)) {
+        // Não se sobrepõem, mas podem estar colados: a mesma dupla
+        // jogando dois horários seguidos, sem intervalo pra respirar.
+        if (!x.playerIds.some((p) => y.playerIds.includes(p))) continue;
+        const [antes, depois] = x.start <= y.start ? [x, y] : [y, x];
+        const folga = depois.start - antes.end;
+        const exigido = antes.durationMinutes * REST_SLOTS;
+        if (folga >= exigido) continue;
+        add(
+          antes.id,
+          `Sem descanso: a mesma dupla joga de novo às ${formatTime(depois.scheduledTime)} (${depois.court ?? "sem quadra"}), ${folga} min depois`,
+        );
+        add(
+          depois.id,
+          `Sem descanso: a mesma dupla acabou de jogar às ${formatTime(antes.scheduledTime)} (${antes.court ?? "sem quadra"}), ${folga} min antes`,
+        );
+        continue;
+      }
 
       if (x.court && x.court === y.court) {
         add(x.id, `${y.court} às ${formatTime(y.scheduledTime)} também tem: ${y.label}`);

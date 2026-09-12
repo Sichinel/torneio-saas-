@@ -22,6 +22,19 @@ export function minutesSinceStart(startTime: string, time: string): number {
 const DEFAULT_DURATION_MINUTES = 40;
 
 /**
+ * Descanso mínimo entre dois jogos da mesma dupla, em "slots": 1 slot
+ * significa que, terminando um jogo, a dupla fica de fora do horário
+ * seguinte. Sem isso o agendador encaixa a mesma dupla em horários
+ * colados, que é jogável no papel e desumano na quadra.
+ */
+export const REST_SLOTS = 1;
+
+/** Quanto tempo a dupla fica indisponível depois de um jogo (jogo + descanso). */
+export function blockAfterMatch(durationMinutes: number): number {
+  return durationMinutes * (1 + REST_SLOTS);
+}
+
+/**
  * Duração dos jogos de uma categoria: a gravada no config (torneios
  * novos); em torneios antigos, deduzida do menor intervalo entre jogos
  * seguidos na mesma quadra; senão, 40 minutos.
@@ -59,6 +72,7 @@ export function scheduleKnockout(
   startTime: string,
   courtFreeFrom: Record<string, number>,
   notBefore: number,
+  playerFreeFrom: Record<string, number> = {},
 ) {
   const courtFree: Record<string, number> = {};
   courts.forEach((c) => (courtFree[c] = Math.max(courtFreeFrom[c] ?? 0, 0)));
@@ -69,7 +83,19 @@ export function scheduleKnockout(
     const round = match.round ?? 0;
     const slot = match.bracketSlot ?? 0;
     const feeders = ordered.filter((m) => m.round === round - 1 && (m.bracketSlot === slot * 2 || m.bracketSlot === slot * 2 + 1));
-    const earliest = round === 0 ? notBefore : Math.max(notBefore, ...feeders.map((f) => endOf.get(f.id) ?? notBefore));
+
+    // 1ª rodada: as duplas vêm dos grupos, então herdam o descanso que
+    // já acumularam lá. Rodadas seguintes: ainda não se sabe QUEM vem,
+    // mas sabe-se que vem de um jogo — então o descanso é medido a
+    // partir do fim do jogo alimentador.
+    const porJogadores = Math.max(0, ...playersOf(match).map((p) => playerFreeFrom[p] ?? 0));
+    const earliest =
+      round === 0
+        ? Math.max(notBefore, porJogadores)
+        : Math.max(
+            notBefore,
+            ...feeders.map((f) => (endOf.get(f.id) ?? notBefore) + f.durationMinutes * REST_SLOTS),
+          );
 
     let bestCourt = courts[0];
     courts.forEach((c) => {
@@ -138,7 +164,8 @@ export function scheduleAcrossCategories(categories: CategoryTiers[], courts: st
       match.court = bestCourt;
       match.scheduledTime = addMinutes(startTime, now);
       courtFreeMinutes[bestCourt] = now + match.durationMinutes;
-      playersOf(match).forEach((p) => playerFreeMinutes.set(p, now + match.durationMinutes));
+      // + descanso: a dupla não pode ser escalada no horário seguinte
+      playersOf(match).forEach((p) => playerFreeMinutes.set(p, now + blockAfterMatch(match.durationMinutes)));
     }
   }
 }

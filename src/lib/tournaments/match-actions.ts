@@ -17,7 +17,7 @@ import {
   isGroupStageComplete,
   planBracketAdvance,
 } from "@/lib/tournament-logic/knockout";
-import { inferDurationMinutes, minutesSinceStart, scheduleKnockout } from "@/lib/tournament-logic/schedule";
+import { blockAfterMatch, inferDurationMinutes, minutesSinceStart, scheduleKnockout } from "@/lib/tournament-logic/schedule";
 import { findScheduleConflicts, scheduledMatchesFromRows } from "@/lib/tournament-logic/conflicts";
 import type { MatchTeam } from "@/lib/tournament-logic/types";
 
@@ -213,7 +213,21 @@ export async function generateKnockout(categoryId: string): Promise<ActionResult
     if (m.court && m.scheduled_time) courtFreeFrom[m.court] = Math.max(courtFreeFrom[m.court] ?? 0, endOf(m));
   });
   const notBefore = Math.max(0, ...groupMatches.filter((m) => m.scheduled_time).map(endOf));
-  if ((tournament.courts ?? []).length > 0) scheduleKnockout(knockout, tournament.courts, start, courtFreeFrom, notBefore);
+
+  // Quando cada jogador fica livre de novo, já contando o descanso: sem
+  // isso, quem fecha a fase de grupos às 17h30 abre as quartas às 18h.
+  const playerFreeFrom: Record<string, number> = {};
+  all.forEach((m) => {
+    if (!m.scheduled_time) return;
+    const livre =
+      minutesSinceStart(start, m.scheduled_time) + blockAfterMatch(durationByCat.get(m.category_id) ?? duration);
+    [...(m.team_a?.playerIds ?? []), ...(m.team_b?.playerIds ?? [])].forEach((jogador) => {
+      playerFreeFrom[jogador] = Math.max(playerFreeFrom[jogador] ?? 0, livre);
+    });
+  });
+
+  if ((tournament.courts ?? []).length > 0)
+    scheduleKnockout(knockout, tournament.courts, start, courtFreeFrom, notBefore, playerFreeFrom);
 
   const { error } = await supabase.from("matches").insert(
     knockout.map((m) => ({
