@@ -1453,6 +1453,94 @@ textarea {
 }
 
 @layer components {
+  /* Acordeão de jogos embaixo de cada tabela de grupo, na Classificação.
+     A tabela responde "quem está ganhando"; os jogos, "por quê" — e essa
+     segunda pergunta é ocasional, então vem fechada. */
+  .pub-jogos-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 46px; /* alvo de toque confortável no celular */
+    margin-top: 2px;
+    padding: 0 2px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: transparent;
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--accent-deep);
+    text-align: left;
+  }
+  .pub-jogos-toggle .seta {
+    display: inline-block;
+    font-size: 12px;
+    transition: transform 0.18s ease;
+  }
+  .pub-jogos-toggle[aria-expanded="true"] .seta {
+    transform: rotate(90deg);
+  }
+
+  .pub-jogos-lista {
+    padding: 2px 0 8px;
+    animation: acordeaoAbre 0.18s ease;
+  }
+  @keyframes acordeaoAbre {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pub-jogos-toggle .seta {
+      transition: none;
+    }
+    .pub-jogos-lista {
+      animation: none;
+    }
+  }
+
+  .pub-jogo {
+    padding: 9px 0;
+    border-top: 1px solid var(--line);
+  }
+  .pub-jogo:first-child {
+    border-top: 0;
+  }
+  .pub-jogo.is-live {
+    background: rgba(79, 168, 255, 0.07);
+    border-radius: 10px;
+    margin: 0 -8px;
+    padding: 9px 8px;
+  }
+  .pub-jogo-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 2px;
+  }
+  .pub-jogo .pub-row {
+    padding: 2px 0;
+  }
+  .pub-jogo .pub-team {
+    font-size: 15px;
+  }
+  .pub-jogo-vazio {
+    padding: 10px 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+}
+
+@layer components {
   /* Aba "Mata-mata": chave empilhada na vertical, pra caber em 390px. */
   .pub-rodada {
     margin-bottom: 26px;

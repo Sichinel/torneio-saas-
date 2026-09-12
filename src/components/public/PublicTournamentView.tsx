@@ -504,32 +504,14 @@ function Classificacao({
           <div key={cat.id}>
             {categories.length > 1 && <div className="pub-group">{cat.name}</div>}
             <Classificados cat={cat} groups={catGroups} matches={matches} />
-            {catGroups.map((g) => {
-              const gm = matches.filter((m) => m.group_id === g.id);
-              const rows = computeGroupStandings(
-                gm.map((m) => ({
-                  teamA: m.team_a,
-                  teamB: m.team_b,
-                  sets: m.sets,
-                  completed: m.completed,
-                  winnerSide: m.winner_side,
-                })),
-              );
-              const feitos = gm.filter((m) => m.completed).length;
-              return (
-                <div key={g.id}>
-                  <div className="pub-group">
-                    {g.name}{" "}
-                    <span style={{ fontSize: 12.5, color: "var(--ink-soft)", fontWeight: 400 }}>
-                      {feitos}/{gm.length} jogos
-                    </span>
-                  </div>
-                  <div className="panel glass" style={{ padding: "4px 12px" }}>
-                    <StandingsTable rows={rows} highlight={cat.format === "grupos" ? QUALIFIERS_PER_GROUP : 0} />
-                  </div>
-                </div>
-              );
-            })}
+            {catGroups.map((g) => (
+              <GrupoBloco
+                key={g.id}
+                grupo={g}
+                jogos={matches.filter((m) => m.group_id === g.id).sort(byTime)}
+                highlight={cat.format === "grupos" ? QUALIFIERS_PER_GROUP : 0}
+              />
+            ))}
           </div>
         );
       })}
@@ -539,6 +521,111 @@ function Classificacao({
         Desempate nessa ordem; persistindo, confronto direto.
       </p>
     </>
+  );
+}
+
+/**
+ * Um grupo na aba Classificação: a tabela sempre à vista, os jogos atrás
+ * de um botão.
+ *
+ * O estado de aberto/fechado mora aqui dentro, e não no componente da
+ * aba, porque é isso que faz cada grupo ser independente: abrir o Grupo A
+ * não mexe no B. Um `Set` de ids no pai daria o mesmo resultado com mais
+ * peças móveis.
+ *
+ * A lista sai de `jogos`, que é prop vinda do mesmo `matches` que o
+ * Realtime atualiza — então um placar que muda com o grupo aberto entra
+ * sozinho, sem precisar fechar e abrir.
+ */
+function GrupoBloco({
+  grupo,
+  jogos,
+  highlight,
+}: {
+  grupo: PublicGroup;
+  jogos: PublicMatch[];
+  highlight: number;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const feitos = jogos.filter((m) => m.completed).length;
+  const rows = computeGroupStandings(
+    jogos.map((m) => ({
+      teamA: m.team_a,
+      teamB: m.team_b,
+      sets: m.sets,
+      completed: m.completed,
+      winnerSide: m.winner_side,
+    })),
+  );
+
+  return (
+    <div>
+      <div className="pub-group">
+        {grupo.name}{" "}
+        <span style={{ fontSize: 12.5, color: "var(--ink-soft)", fontWeight: 400 }}>
+          {feitos}/{jogos.length} jogos
+        </span>
+      </div>
+      <div className="panel glass" style={{ padding: "4px 12px" }}>
+        <StandingsTable rows={rows} highlight={highlight} />
+
+        <button type="button" className="pub-jogos-toggle" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
+          <span className={`seta ${aberto ? "aberta" : ""}`} aria-hidden="true">
+            ▸
+          </span>
+          {aberto ? "Esconder jogos" : "Mostrar jogos"}
+        </button>
+
+        {aberto && (
+          <div className="pub-jogos-lista">
+            {jogos.length === 0 ? (
+              <div className="pub-jogo-vazio">Nenhum jogo neste grupo ainda.</div>
+            ) : (
+              jogos.map((m) => <JogoDoGrupo key={m.id} match={m} />)
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Uma partida dentro do acordeão. Linha compacta, e não o card das abas
+ * de quadra: card de vidro dentro de card de vidro embola, e aqui já
+ * existe o contexto do grupo em volta.
+ */
+function JogoDoGrupo({ match }: { match: PublicMatch }) {
+  const status = matchStatus(match);
+  const sets = (match.sets ?? []).filter((s) => s.a !== null && s.b !== null);
+
+  return (
+    <div className={`pub-jogo ${status === "andamento" ? "is-live" : ""}`}>
+      <div className="pub-jogo-meta">
+        <span className="pub-time">{formatTime(match.scheduled_time)}</span>
+        {match.court && <span>{match.court}</span>}
+        {status === "andamento" && (
+          <span className="badge live">
+            <span className="status-dot" />
+            Ao vivo
+          </span>
+        )}
+        {status === "finalizado" && <span className="badge done">Fim</span>}
+      </div>
+
+      <TeamRow
+        team={match.team_a}
+        games={sets.map((s) => s.a)}
+        contra={sets.map((s) => s.b)}
+        venceu={match.winner_side === "A"}
+      />
+      <TeamRow
+        team={match.team_b}
+        games={sets.map((s) => s.b)}
+        contra={sets.map((s) => s.a)}
+        venceu={match.winner_side === "B"}
+      />
+    </div>
   );
 }
 
