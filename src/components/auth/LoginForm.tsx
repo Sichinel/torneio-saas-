@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { login } from "@/lib/auth/actions";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
@@ -15,7 +16,15 @@ export function LoginForm() {
         <input id="email" name="email" type="email" required autoComplete="email" />
       </div>
       <div className="field">
-        <label htmlFor="password">Senha</label>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+          <label htmlFor="password">Senha</label>
+          <Link
+            href="/forgot-password"
+            style={{ fontSize: 12.5, color: "var(--ink-soft)", fontWeight: 500 }}
+          >
+            Esqueci minha senha
+          </Link>
+        </div>
         <input id="password" name="password" type="password" required autoComplete="current-password" />
       </div>
       {state && !state.ok && (
